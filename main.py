@@ -20,25 +20,41 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def train(model, train_dataset, loss_fn, optimizer):
     model.train()
     total_loss = 0
+
     for iteration, batch in enumerate(nextBatch(shuffle(train_dataset.data), args.batch_size)):
-        x, y = batch[:, :-1, :], batch[:, -1, :]
-        if args.iscuda:
-            x, y = x.to(device), y.to(device)
+        try:
+            x, y = batch[:, :-1, :], batch[:, -1, :]
 
-        optimizer.zero_grad(set_to_none=True)
-        y_hat = model(x)
-        loss = loss_fn(y_hat, y)
-        loss.backward()
-        optimizer.step()
+            if args.iscuda:
+                x, y = x.to(device), y.to(device)
 
-        total_loss += loss.item()
-        if (iteration + 1) % 10 == 0:
-            print(f"Iteration {iteration + 1}, Loss: {loss.item():.8f}")
+            optimizer.zero_grad(set_to_none=True)
 
-    avg_loss = total_loss / len(train_dataset.data)
+            # 添加维度检查
+            if iteration == 0:
+                print(f"\nBatch shapes:")
+                print(f"Input shape: {x.shape}")
+                print(f"Target shape: {y.shape}")
+
+            y_hat = model(x)
+            loss = loss_fn(y_hat, y)
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
+            if (iteration + 1) % 10 == 0:
+                print(f"Iteration {iteration + 1}, Loss: {loss.item():.8f}")
+
+        except RuntimeError as e:
+            print(f"Error in iteration {iteration}:")
+            print(f"Batch shape: {batch.shape}")
+            print(f"Input shape: {x.shape}")
+            print(f"Target shape: {y.shape}")
+            raise e
+
+    avg_loss = total_loss / (iteration + 1)
     train_rmse, train_mae, train_mape, _ = evaluate(model, train_dataset, loss_fn)
     return train_rmse, train_mae, train_mape, avg_loss
-
 
 # Evaluation Loop
 def evaluate(model, dataset, loss_fn):
@@ -84,11 +100,24 @@ def run_experiment():
     test_dataset = NYCTaxiDataset(data_path='data/volume_test.npz')
     print("Dataset loaded")
 
-    # Initialize Model
+    # 初始化模型参数
+    input_size = 5000  # 50*50*2 (flattened spatial and pickup/dropoff dimensions)
+    output_size = 5000  # 预测下一个时间步的相同维度
+
+    # 初始化模型
     if args.model == "lstm":
-        model = MyLSTM(input_size=200, hidden_size=args.hidden_size, output_size=200, drop_prob=args.drop_prob)
+        model = MyLSTM(input_size=input_size,
+                       hidden_size=args.hidden_size,
+                       output_size=output_size,
+                       drop_prob=args.drop_prob)
     elif args.model == "cnnlstm":
-        model = CNNLSTM(in_channel=1, out_channels=[64, 128], input_size=200, hidden_size=args.hidden_size, output_size=200, drop_prob=args.drop_prob)
+        model = CNNLSTM(in_channel=1,
+                        out_channels=[64, 128],
+                        input_size=input_size,
+                        hidden_size=args.hidden_size,
+                        output_size=output_size,
+                        drop_prob=args.drop_prob)
+
     print(f"Model {args.model} initialized")
 
     # Set up training components

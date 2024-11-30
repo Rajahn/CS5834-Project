@@ -8,11 +8,23 @@ class NYCTaxiDataset():
         self.data = torch.from_numpy(self.loading(data_path)).float()
 
     def loading(self, data_path):
-        data = np.load(data_path)['volume']
-        self.max_val, self.min_val = np.max(data), np.min(data)
-        dataset = slidingWindow(data, self.window_size)
-        dataset = np.array(dataset).transpose(0, 1, 4, 2, 3)
-        dataset = dataset.reshape(dataset.shape[0], dataset.shape[1], -1)
+        data = np.load(data_path)['volume']  # shape: (time, 50, 50, 2, 3)
+        # 我们只使用flow数据来预测，忽略day_of_week和hour特征
+        flow_data = data[:, :, :, :, 0]  # 提取flow值，shape: (time, 50, 50, 2)
+
+        self.max_val, self.min_val = np.max(flow_data), np.min(flow_data)
+
+        # 重塑数据为 (time, 5000) - 将50x50x2展平
+        flow_data = flow_data.reshape(flow_data.shape[0], -1)
+
+        # 创建滑动窗口序列
+        dataset = []
+        for i in range(len(flow_data) - self.window_size + 1):
+            dataset.append(flow_data[i:i + self.window_size])
+
+        dataset = np.array(dataset)  # shape: (samples, window_size, 5000)
+
+        # 归一化
         dataset = (dataset - self.min_val) / (self.max_val - self.min_val)
         return dataset
 
