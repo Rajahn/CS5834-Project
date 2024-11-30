@@ -5,6 +5,8 @@ import warnings
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
+
+from model.cnn_lstm_attention import CNNLSTMAttention
 from model.lstm import MyLSTM
 from model.cnn_lstm import CNNLSTM
 from data_loader import NYCTaxiDataset
@@ -112,6 +114,13 @@ def run_experiment():
                        drop_prob=args.drop_prob)
     elif args.model == "cnnlstm":
         model = CNNLSTM(in_channel=1,
+                        out_channels=[64, 128],
+                        input_size=input_size,
+                        hidden_size=args.hidden_size,
+                        output_size=output_size,
+                        drop_prob=args.drop_prob)
+    elif args.model == "cnnlstmattn":
+        model = CNNLSTMAttention(in_channel=1,
                         out_channels=[64, 128],
                         input_size=input_size,
                         hidden_size=args.hidden_size,
